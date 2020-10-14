@@ -18,23 +18,29 @@ package com.qmuiteam.qmui.util;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
-import android.content.res.Configuration;
 import android.graphics.Rect;
 import android.os.Build;
-import androidx.coordinatorlayout.widget.CoordinatorLayout;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import android.view.DisplayCutout;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowInsets;
 import android.widget.FrameLayout;
 
+import androidx.annotation.NonNull;
+import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.coordinatorlayout.widget.CoordinatorLayout;
+import androidx.core.graphics.Insets;
+import androidx.core.view.DisplayCutoutCompat;
+import androidx.core.view.OnApplyWindowInsetsListener;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+
+import com.qmuiteam.qmui.R;
 import com.qmuiteam.qmui.widget.INotchInsetConsumer;
+import com.qmuiteam.qmui.widget.IWindowInsetKeyboardConsumer;
 import com.qmuiteam.qmui.widget.IWindowInsetLayout;
 
-import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 
 /**
  * @author cginechen
@@ -42,63 +48,78 @@ import java.lang.ref.WeakReference;
  */
 
 public class QMUIWindowInsetHelper {
-    private final int KEYBOARD_HEIGHT_BOUNDARY;
-    private final WeakReference<IWindowInsetLayout> mWindowInsetLayoutWR;
-    private int sApplySystemWindowInsetsCount = 0;
 
-    public QMUIWindowInsetHelper(ViewGroup viewGroup, IWindowInsetLayout windowInsetLayout) {
-        mWindowInsetLayoutWR = new WeakReference<>(windowInsetLayout);
-        KEYBOARD_HEIGHT_BOUNDARY = QMUIDisplayHelper.dp2px(viewGroup.getContext(), 100);
+    private static ArrayList<Class<? extends ViewGroup>> sCustomHandlerContainerList = new ArrayList<>();
+    private static int sCurrentWindowInsetDepth = 0;
 
-        if (QMUINotchHelper.isNotchOfficialSupport()) {
-            setOnApplyWindowInsetsListener28(viewGroup);
-        } else {
-            // some rom crash with WindowInsets...
-            ViewCompat.setOnApplyWindowInsetsListener(viewGroup,
-                    new androidx.core.view.OnApplyWindowInsetsListener() {
-                        @Override
-                        public WindowInsetsCompat onApplyWindowInsets(View v,
-                                                                      WindowInsetsCompat insets) {
-                            if (Build.VERSION.SDK_INT >= 21 && mWindowInsetLayoutWR.get() != null) {
-                                if (mWindowInsetLayoutWR.get().applySystemWindowInsets21(insets)) {
-                                    return insets.consumeSystemWindowInsets();
+    public static void apply(@NonNull final ViewGroup viewGroup){
+        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP){
+            // need to override fitSystemWindows().
+            return;
+        }
+        if(!(viewGroup instanceof IWindowInsetLayout)){
+            throw new IllegalStateException(viewGroup.getClass().getSimpleName() + " must implement IWindowInsetLayout");
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(viewGroup,
+                new OnApplyWindowInsetsListener() {
+                    @Override
+                    public WindowInsetsCompat onApplyWindowInsets(View v,
+                                                                  WindowInsetsCompat insets) {
+
+                        // avoid dispatching multiple times
+                        boolean needToDispatchNotchInsetChange = QMUINotchHelper.isNotchOfficialSupport() && sCurrentWindowInsetDepth == 0;
+                        if (sCurrentWindowInsetDepth == 0) {
+                            // always consume display cutout!!
+                            DisplayCutoutCompat displayCutout = insets.getDisplayCutout();
+                            if (displayCutout != null) {
+                                needToDispatchNotchInsetChange = true;
+                                v.setTag(R.id.qmui_window_inset_layout_display_cutout, true);
+                                insets = insets.consumeDisplayCutout();
+                            }else{
+                                insets = insets.consumeDisplayCutout();
+                                Object lastHasNotchInfo = v.getTag(R.id.qmui_window_inset_layout_display_cutout);
+                                if(lastHasNotchInfo != null && (Boolean)lastHasNotchInfo){
+                                    needToDispatchNotchInsetChange = true;
+                                    v.setTag(R.id.qmui_window_inset_layout_display_cutout, false);
                                 }
                             }
-                            return insets;
                         }
-                    });
-        }
-    }
 
-    @TargetApi(28)
-    private void setOnApplyWindowInsetsListener28(ViewGroup viewGroup) {
-        // WindowInsetsCompat does not exist DisplayCutout stuff...
-        viewGroup.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
-            @Override
-            public WindowInsets onApplyWindowInsets(View view, WindowInsets windowInsets) {
-                if (mWindowInsetLayoutWR.get() != null &&
-                        mWindowInsetLayoutWR.get().applySystemWindowInsets21(windowInsets)) {
-                    windowInsets = windowInsets.consumeSystemWindowInsets();
-                    DisplayCutout displayCutout = windowInsets.getDisplayCutout();
-                    if (displayCutout != null) {
-                        windowInsets = windowInsets.consumeDisplayCutout();
+                        if(!insets.isConsumed()){
+                            sCurrentWindowInsetDepth ++;
+                            if(v instanceof IWindowInsetLayout){
+                                IWindowInsetLayout windowInsetLayout = (IWindowInsetLayout) v;
+                                insets = windowInsetLayout.applySystemWindowInsets21(insets);
+                            }
+                            sCurrentWindowInsetDepth --;
+                        }
+
+                        if (needToDispatchNotchInsetChange) {
+                            dispatchNotchInsetChange(v);
+                        }
+                        return insets;
                     }
-                    return windowInsets;
-                }
-                return windowInsets;
-            }
-        });
+                });
     }
 
-    @SuppressWarnings("deprecation")
-    @TargetApi(19)
-    public boolean defaultApplySystemWindowInsets19(ViewGroup viewGroup, Rect insets) {
+    public static boolean defaultApplySystemWindowInsets19(ViewGroup viewGroup, Rect insets) {
         boolean consumed = false;
-        if (insets.bottom >= KEYBOARD_HEIGHT_BOUNDARY) {
-            QMUIViewHelper.setPaddingBottom(viewGroup, insets.bottom);
+        if (insets.bottom >= QMUIDisplayHelper.dp2px(viewGroup.getContext(), QMUIWindowHelper.KEYBOARD_HEIGHT_BOUNDARY_DP)
+                && shouldInterceptKeyboardInset(viewGroup)) {
+            if(viewGroup instanceof IWindowInsetKeyboardConsumer){
+                ((IWindowInsetKeyboardConsumer)viewGroup).onHandleKeyboard(insets.bottom);
+            }else{
+                QMUIViewHelper.setPaddingBottom(viewGroup, insets.bottom);
+            }
+            viewGroup.setTag(R.id.qmui_window_inset_keyboard_area_consumer, QMUIKeyboardHelper.KEYBOARD_CONSUMER);
             insets.bottom = 0;
         } else {
-            QMUIViewHelper.setPaddingBottom(viewGroup, 0);
+            viewGroup.setTag(R.id.qmui_window_inset_keyboard_area_consumer, null);
+            if(viewGroup instanceof IWindowInsetKeyboardConsumer){
+                ((IWindowInsetKeyboardConsumer)viewGroup).onHandleKeyboard(0);
+            }else{
+                QMUIViewHelper.setPaddingBottom(viewGroup, 0);
+            }
         }
 
         for (int i = 0; i < viewGroup.getChildCount(); i++) {
@@ -108,7 +129,7 @@ public class QMUIWindowInsetHelper {
             }
 
             Rect childInsets = new Rect(insets);
-            computeInsetsWithGravity(child, childInsets);
+            computeInsets(child, childInsets);
 
             if (!isHandleContainer(child)) {
                 child.setPadding(childInsets.left, childInsets.top, childInsets.right, childInsets.bottom);
@@ -127,28 +148,25 @@ public class QMUIWindowInsetHelper {
     }
 
     @TargetApi(21)
-    public boolean defaultApplySystemWindowInsets21(ViewGroup viewGroup, Object insets) {
-        if (QMUINotchHelper.isNotchOfficialSupport()) {
-            return defaultApplySystemWindowInsets(viewGroup, (WindowInsets) insets);
-        } else {
-            return defaultApplySystemWindowInsetsCompat(viewGroup, (WindowInsetsCompat) insets);
-        }
-    }
-
-    @TargetApi(21)
-    public boolean defaultApplySystemWindowInsetsCompat(ViewGroup viewGroup, WindowInsetsCompat insets) {
-        if (!insets.hasSystemWindowInsets()) {
-            return false;
-        }
-        boolean consumed = false;
+    public static WindowInsetsCompat defaultApplySystemWindowInsets21(ViewGroup viewGroup, WindowInsetsCompat insets) {
         boolean showKeyboard = false;
-        if (insets.getSystemWindowInsetBottom() >= KEYBOARD_HEIGHT_BOUNDARY) {
+        if (insets.getSystemWindowInsetBottom() >= QMUIDisplayHelper.dp2px(viewGroup.getContext(), QMUIWindowHelper.KEYBOARD_HEIGHT_BOUNDARY_DP) &&
+                shouldInterceptKeyboardInset(viewGroup)) {
             showKeyboard = true;
-            QMUIViewHelper.setPaddingBottom(viewGroup, insets.getSystemWindowInsetBottom());
+            if(viewGroup instanceof IWindowInsetKeyboardConsumer){
+                ((IWindowInsetKeyboardConsumer)viewGroup).onHandleKeyboard(insets.getSystemWindowInsetBottom());
+            }else{
+                QMUIViewHelper.setPaddingBottom(viewGroup, insets.getSystemWindowInsetBottom());
+            }
+            viewGroup.setTag(R.id.qmui_window_inset_keyboard_area_consumer, QMUIKeyboardHelper.KEYBOARD_CONSUMER);
         } else {
-            QMUIViewHelper.setPaddingBottom(viewGroup, 0);
+            if(viewGroup instanceof IWindowInsetKeyboardConsumer){
+                ((IWindowInsetKeyboardConsumer)viewGroup).onHandleKeyboard(0);
+            }else{
+                QMUIViewHelper.setPaddingBottom(viewGroup, 0);
+            }
+            viewGroup.setTag(R.id.qmui_window_inset_keyboard_area_consumer, null);
         }
-
         for (int i = 0; i < viewGroup.getChildCount(); i++) {
             View child = viewGroup.getChildAt(i);
 
@@ -156,79 +174,33 @@ public class QMUIWindowInsetHelper {
                 continue;
             }
 
-            int insetLeft =  insets.getSystemWindowInsetLeft();
-            int insetRight = insets.getSystemWindowInsetRight();
-            if(QMUINotchHelper.needFixLandscapeNotchAreaFitSystemWindow(viewGroup) &&
-                    viewGroup.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE){
-                insetLeft = Math.max(insetLeft, QMUINotchHelper.getSafeInsetLeft(viewGroup));
-                insetRight = Math.max(insetRight, QMUINotchHelper.getSafeInsetRight(viewGroup));
-            }
-
             Rect childInsets = new Rect(
-                    insetLeft,
+                    insets.getSystemWindowInsetLeft(),
                     insets.getSystemWindowInsetTop(),
-                    insetRight,
+                    insets.getSystemWindowInsetRight(),
                     showKeyboard ? 0 : insets.getSystemWindowInsetBottom());
-
-            computeInsetsWithGravity(child, childInsets);
-            WindowInsetsCompat windowInsetsCompat = ViewCompat.dispatchApplyWindowInsets(child, insets.replaceSystemWindowInsets(childInsets));
-            consumed = consumed || (windowInsetsCompat != null && windowInsetsCompat.isConsumed());
+            computeInsets(child, childInsets);
+            if (!isHandleContainer(child)) {
+                child.setPadding(childInsets.left, childInsets.top, childInsets.right, childInsets.bottom);
+            }else{
+                WindowInsetsCompat childWindowInsets = new WindowInsetsCompat.Builder(insets)
+                        .setSystemWindowInsets(Insets.of(childInsets))
+                        .build();
+                ViewCompat.dispatchApplyWindowInsets(child, childWindowInsets);
+            }
         }
-
-        return consumed;
+        return insets.consumeSystemWindowInsets();
     }
 
-    @TargetApi(28)
-    public boolean defaultApplySystemWindowInsets(ViewGroup viewGroup, WindowInsets insets) {
-        sApplySystemWindowInsetsCount++;
-        if (QMUINotchHelper.isNotchOfficialSupport()) {
-            if (sApplySystemWindowInsetsCount == 1) {
-                // avoid dispatching multiple times
-                dispatchNotchInsetChange(viewGroup);
-            }
-            // always consume display cutout!!
-            insets = insets.consumeDisplayCutout();
-        }
 
-        boolean consumed = false;
-        if (insets.hasSystemWindowInsets()) {
-            boolean showKeyboard = false;
-            if (insets.getSystemWindowInsetBottom() >= KEYBOARD_HEIGHT_BOUNDARY) {
-                showKeyboard = true;
-                QMUIViewHelper.setPaddingBottom(viewGroup, insets.getSystemWindowInsetBottom());
-            } else {
-                QMUIViewHelper.setPaddingBottom(viewGroup, 0);
-            }
-            for (int i = 0; i < viewGroup.getChildCount(); i++) {
-                View child = viewGroup.getChildAt(i);
-
-                if (jumpDispatch(child)) {
-                    continue;
-                }
-
-                Rect childInsets = new Rect(
-                        insets.getSystemWindowInsetLeft(),
-                        insets.getSystemWindowInsetTop(),
-                        insets.getSystemWindowInsetRight(),
-                        showKeyboard ? 0 : insets.getSystemWindowInsetBottom());
-                computeInsetsWithGravity(child, childInsets);
-                WindowInsets childWindowInsets = insets.replaceSystemWindowInsets(childInsets);
-                WindowInsets windowInsets = child.dispatchApplyWindowInsets(childWindowInsets);
-                consumed = consumed || windowInsets.isConsumed();
-            }
-        }
-        sApplySystemWindowInsetsCount--;
-        return consumed;
-    }
-
-    private void dispatchNotchInsetChange(View view) {
+    private static void dispatchNotchInsetChange(View view) {
         if (view instanceof INotchInsetConsumer) {
             boolean stop = ((INotchInsetConsumer) view).notifyInsetMaybeChanged();
             if (stop) {
                 return;
             }
         }
-        if (view instanceof ViewGroup) {
+        if (view instanceof ViewGroup && view.getClass().getAnnotation(InterceptNotchInsetDispatch.class) == null) {
             ViewGroup viewGroup = (ViewGroup) view;
             int childCount = viewGroup.getChildCount();
             for (int i = 0; i < childCount; i++) {
@@ -237,20 +209,44 @@ public class QMUIWindowInsetHelper {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @TargetApi(19)
+    private static boolean shouldInterceptKeyboardInset(ViewGroup viewGroup){
+        return viewGroup.getClass().getAnnotation(DoNotInterceptKeyboardInset.class) == null;
+    }
+
     public static boolean jumpDispatch(View child) {
         return !child.getFitsSystemWindows() && !isHandleContainer(child);
     }
 
     public static boolean isHandleContainer(View child) {
-        return child instanceof IWindowInsetLayout ||
-                child instanceof CoordinatorLayout;
+        boolean ret = child instanceof IWindowInsetLayout ||
+                child instanceof CoordinatorLayout ||
+                child instanceof DrawerLayout;
+        if (ret) {
+            return true;
+        }
+        for (Class<? extends View> clz : sCustomHandlerContainerList) {
+            if (clz.isInstance(child)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void addHandleContainer(Class<? extends ViewGroup> clazz) {
+        sCustomHandlerContainerList.add(clazz);
+    }
+
+    public static void computeInsets(View view, Rect insets) {
+        ViewGroup.LayoutParams lp = view.getLayoutParams();
+        if(lp instanceof ConstraintLayout.LayoutParams){
+            computeInsetsWithConstraint(insets, (ConstraintLayout.LayoutParams) lp);
+        }else{
+            computeInsetsWithGravity(insets, lp);
+        }
     }
 
     @SuppressLint("RtlHardcoded")
-    public void computeInsetsWithGravity(View view, Rect insets) {
-        ViewGroup.LayoutParams lp = view.getLayoutParams();
+    public static void computeInsetsWithGravity(Rect insets, ViewGroup.LayoutParams lp) {
         int gravity = -1;
         if (lp instanceof FrameLayout.LayoutParams) {
             gravity = ((FrameLayout.LayoutParams) lp).gravity;
@@ -265,7 +261,7 @@ public class QMUIWindowInsetHelper {
             gravity = Gravity.TOP | Gravity.LEFT;
         }
 
-        if (lp.width != FrameLayout.LayoutParams.MATCH_PARENT) {
+        if (lp.width != ViewGroup.LayoutParams.MATCH_PARENT) {
             int horizontalGravity = gravity & Gravity.HORIZONTAL_GRAVITY_MASK;
             switch (horizontalGravity) {
                 case Gravity.LEFT:
@@ -277,7 +273,7 @@ public class QMUIWindowInsetHelper {
             }
         }
 
-        if (lp.height != FrameLayout.LayoutParams.MATCH_PARENT) {
+        if (lp.height != ViewGroup.LayoutParams.MATCH_PARENT) {
             int verticalGravity = gravity & Gravity.VERTICAL_GRAVITY_MASK;
             switch (verticalGravity) {
                 case Gravity.TOP:
@@ -286,6 +282,24 @@ public class QMUIWindowInsetHelper {
                 case Gravity.BOTTOM:
                     insets.top = 0;
                     break;
+            }
+        }
+    }
+
+    public static void computeInsetsWithConstraint(Rect insets, ConstraintLayout.LayoutParams lp){
+        if (lp.width == ViewGroup.LayoutParams.WRAP_CONTENT) {
+            if(lp.leftToLeft == ConstraintLayout.LayoutParams.PARENT_ID){
+                insets.right = 0;
+            }else if(lp.rightToRight == ConstraintLayout.LayoutParams.PARENT_ID){
+                insets.left = 0;
+            }
+        }
+
+        if (lp.height == ViewGroup.LayoutParams.WRAP_CONTENT) {
+            if(lp.topToTop == ConstraintLayout.LayoutParams.PARENT_ID){
+                insets.bottom = 0;
+            }else if(lp.bottomToBottom == ConstraintLayout.LayoutParams.PARENT_ID){
+                insets.top = 0;
             }
         }
     }

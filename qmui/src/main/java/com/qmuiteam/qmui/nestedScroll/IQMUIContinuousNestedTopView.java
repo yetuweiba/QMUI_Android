@@ -16,7 +16,7 @@
 
 package com.qmuiteam.qmui.nestedScroll;
 
-public interface IQMUIContinuousNestedTopView {
+public interface IQMUIContinuousNestedTopView extends IQMUIContinuousNestedScrollCommon {
     /**
      * consume scroll
      *
@@ -27,11 +27,5 @@ public interface IQMUIContinuousNestedTopView {
 
     int getCurrentScroll();
 
-    int getScrollRange();
-
-    void injectScrollNotifier(OnScrollNotifier notifier);
-
-    interface OnScrollNotifier {
-        void notify(int innerOffset, int innerRange);
-    }
+    int getScrollOffsetRange();
 }

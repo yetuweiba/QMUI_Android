@@ -17,31 +17,45 @@
 package com.qmuiteam.qmui.nestedScroll;
 
 import android.content.Context;
+import android.os.Build;
+import android.os.Bundle;
 import android.util.AttributeSet;
 
+import com.qmuiteam.qmui.util.QMUIDisplayHelper;
 import com.qmuiteam.qmui.widget.webview.QMUIWebView;
 
+import androidx.annotation.NonNull;
+
 public class QMUIContinuousNestedTopWebView extends QMUIWebView implements IQMUIContinuousNestedTopView {
+
+    public static final String KEY_SCROLL_INFO = "@qmui_scroll_info_top_webview";
 
     private OnScrollNotifier mScrollNotifier;
 
     public QMUIContinuousNestedTopWebView(Context context) {
         super(context);
+        init();
     }
 
     public QMUIContinuousNestedTopWebView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        init();
     }
 
     public QMUIContinuousNestedTopWebView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    private void init(){
+        setVerticalScrollBarEnabled(false);
     }
 
     @Override
     public int consumeScroll(int yUnconsumed) {
         // compute the consumed value
         int scrollY = getScrollY();
-        int maxScrollY = getScrollRange();
+        int maxScrollY = getScrollOffsetRange();
         // the scrollY may be negative or larger than scrolling range
         scrollY = Math.max(0, Math.min(scrollY, maxScrollY));
         int dy = 0;
@@ -57,12 +71,12 @@ public class QMUIContinuousNestedTopWebView extends QMUIWebView implements IQMUI
     @Override
     public int getCurrentScroll() {
         int scrollY = getScrollY();
-        int scrollRange = getScrollRange();
+        int scrollRange = getScrollOffsetRange();
         return Math.max(0, Math.min(scrollY, scrollRange));
     }
 
     @Override
-    public int getScrollRange() {
+    public int getScrollOffsetRange() {
         return computeVerticalScrollRange() - getHeight();
     }
 
@@ -75,7 +89,27 @@ public class QMUIContinuousNestedTopWebView extends QMUIWebView implements IQMUI
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
         if (mScrollNotifier != null) {
-            mScrollNotifier.notify(getCurrentScroll(), getScrollRange());
+            mScrollNotifier.notify(getCurrentScroll(), getScrollOffsetRange());
+        }
+    }
+
+    @Override
+    public void saveScrollInfo(@NonNull Bundle bundle) {
+        bundle.putInt(KEY_SCROLL_INFO, getScrollY());
+    }
+
+    @Override
+    public void restoreScrollInfo(@NonNull Bundle bundle) {
+        int scrollY = QMUIDisplayHelper.px2dp(getContext(),
+                bundle.getInt(KEY_SCROLL_INFO, 0));
+        exec("javascript:scrollTo(0, " + scrollY + ")");
+    }
+
+    private void exec(final String jsCode) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            evaluateJavascript(jsCode, null);
+        } else {
+            loadUrl(jsCode);
         }
     }
 }

@@ -30,6 +30,7 @@ import com.qmuiteam.qmui.util.QMUIWindowInsetHelper;
 
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
@@ -43,7 +44,6 @@ public class QMUIViewPager extends ViewPager implements IWindowInsetLayout {
 
     private boolean mIsSwipeable = true;
     private boolean mIsInMeasure = false;
-    private QMUIWindowInsetHelper mQMUIWindowInsetHelper;
     private boolean mEnableLoop = false;
     private int mInfiniteRatio = DEFAULT_INFINITE_RATIO;
 
@@ -53,7 +53,7 @@ public class QMUIViewPager extends ViewPager implements IWindowInsetLayout {
 
     public QMUIViewPager(Context context, AttributeSet attrs) {
         super(context, attrs);
-        mQMUIWindowInsetHelper = new QMUIWindowInsetHelper(this, this);
+        QMUIWindowInsetHelper.apply(this);
     }
 
 
@@ -125,12 +125,12 @@ public class QMUIViewPager extends ViewPager implements IWindowInsetLayout {
 
     @Override
     public boolean applySystemWindowInsets19(Rect insets) {
-        return mQMUIWindowInsetHelper.defaultApplySystemWindowInsets19(this, insets);
+        return QMUIWindowInsetHelper.defaultApplySystemWindowInsets19(this, insets);
     }
 
     @Override
-    public boolean applySystemWindowInsets21(Object insets) {
-        return mQMUIWindowInsetHelper.defaultApplySystemWindowInsets21(this, insets);
+    public WindowInsetsCompat applySystemWindowInsets21(WindowInsetsCompat insets) {
+        return QMUIWindowInsetHelper.defaultApplySystemWindowInsets21(this, insets);
     }
 
     @Override
@@ -151,15 +151,9 @@ public class QMUIViewPager extends ViewPager implements IWindowInsetLayout {
 
         @Override
         public int getCount() {
-            int count;
-            if (mEnableLoop) {
-                if (mAdapter.getCount() == 0) {
-                    count = 0;
-                } else {
-                    count = mAdapter.getCount() * mInfiniteRatio;
-                }
-            } else {
-                count = mAdapter.getCount();
+            int count = mAdapter.getCount();
+            if (mEnableLoop && count > 3) {
+                count *= mInfiniteRatio;
             }
             return count;
         }

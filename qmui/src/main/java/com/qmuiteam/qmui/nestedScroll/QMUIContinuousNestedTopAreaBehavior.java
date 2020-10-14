@@ -29,6 +29,7 @@ import android.widget.OverScroller;
 import androidx.annotation.NonNull;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.core.view.ViewCompat;
+import static android.view.View.MEASURED_SIZE_MASK;
 import static com.qmuiteam.qmui.QMUIInterpolatorStaticHolder.QUNITIC_INTERPOLATOR;
 
 public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<View> {
@@ -44,6 +45,8 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
     private int touchSlop = -1;
     private VelocityTracker velocityTracker;
     private Callback mCallback;
+    private boolean isInTouch = false;
+    private boolean isInFlingOrScroll = false;
 
     public QMUIContinuousNestedTopAreaBehavior(Context context) {
         this(context, null);
@@ -74,6 +77,7 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 mViewFlinger.stop();
+                isInTouch = true;
                 isBeingDragged = false;
                 final int x = (int) ev.getX();
                 final int y = (int) ev.getY();
@@ -109,12 +113,16 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
                 if (yDiff > touchSlop) {
                     isBeingDragged = true;
                     lastMotionY = y;
+                    if (mCallback != null) {
+                        mCallback.onTopBehaviorTouchBegin();
+                    }
                 }
                 break;
             }
 
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP: {
+                isInTouch = false;
                 isBeingDragged = false;
                 this.activePointerId = INVALID_POINTER;
                 if (velocityTracker != null) {
@@ -140,6 +148,7 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 mViewFlinger.stop();
+                isInTouch = true;
                 final int x = (int) ev.getX();
                 final int y = (int) ev.getY();
 
@@ -164,6 +173,9 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
 
                 if (!isBeingDragged && Math.abs(dy) > touchSlop) {
                     isBeingDragged = true;
+                    if (mCallback != null) {
+                        mCallback.onTopBehaviorTouchBegin();
+                    }
                     if (dy > 0) {
                         dy -= touchSlop;
                     } else {
@@ -179,6 +191,10 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
             }
 
             case MotionEvent.ACTION_UP:
+                isInTouch = false;
+                if (mCallback != null) {
+                    mCallback.onTopBehaviorTouchEnd();
+                }
                 if (velocityTracker != null) {
                     velocityTracker.addMovement(ev);
                     velocityTracker.computeCurrentVelocity(1000);
@@ -187,6 +203,12 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
                 }
                 // $FALLTHROUGH
             case MotionEvent.ACTION_CANCEL: {
+                if (isInTouch) {
+                    isInTouch = false;
+                    if (mCallback != null) {
+                        mCallback.onTopBehaviorTouchEnd();
+                    }
+                }
                 isBeingDragged = false;
                 activePointerId = INVALID_POINTER;
                 if (velocityTracker != null) {
@@ -204,7 +226,7 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
         return true;
     }
 
-    private void scroll(@NonNull CoordinatorLayout parent, @NonNull View child, int dy) {
+    void scroll(@NonNull CoordinatorLayout parent, @NonNull View child, int dy) {
         mScrollConsumed[0] = 0;
         mScrollConsumed[1] = 0;
         onNestedPreScroll(parent, child, child, 0, dy, mScrollConsumed, ViewCompat.TYPE_TOUCH);
@@ -213,8 +235,16 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
             unConsumed = ((IQMUIContinuousNestedTopView) child).consumeScroll(unConsumed);
         }
         onNestedScroll(parent, child, child, 0, dy - unConsumed,
-                0, unConsumed, ViewCompat.TYPE_TOUCH, mScrollConsumed);
+                0, unConsumed, ViewCompat.TYPE_TOUCH);
 
+    }
+
+    void smoothScrollBy(@NonNull CoordinatorLayout parent, @NonNull View child, int dy, int duration) {
+        mViewFlinger.startScroll(parent, child, dy, duration);
+    }
+
+    void stopFlingOrScroll() {
+        mViewFlinger.stop();
     }
 
     private void ensureVelocityTracker() {
@@ -224,10 +254,12 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
     }
 
     @Override
-    public boolean onMeasureChild(@NonNull CoordinatorLayout parent, @NonNull View child, int parentWidthMeasureSpec, int widthUsed, int parentHeightMeasureSpec, int heightUsed) {
+    public boolean onMeasureChild(@NonNull CoordinatorLayout parent, @NonNull View child,
+                                  int parentWidthMeasureSpec, int widthUsed,
+                                  int parentHeightMeasureSpec, int heightUsed) {
         final int childLpHeight = child.getLayoutParams().height;
+        int availableHeight = View.MeasureSpec.getSize(parentHeightMeasureSpec);
         if (childLpHeight == ViewGroup.LayoutParams.MATCH_PARENT) {
-            int availableHeight = View.MeasureSpec.getSize(parentHeightMeasureSpec);
             if (availableHeight == 0) {
                 // If the measure spec doesn't specify a size, use the current height
                 availableHeight = parent.getHeight();
@@ -238,28 +270,31 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
             parent.onMeasureChild(
                     child, parentWidthMeasureSpec, widthUsed, heightMeasureSpec, heightUsed);
 
-            return true;
+
+        } else {
+            parent.onMeasureChild(child, parentWidthMeasureSpec, widthUsed,
+                    View.MeasureSpec.makeMeasureSpec(MEASURED_SIZE_MASK, View.MeasureSpec.AT_MOST), heightUsed);
         }
-        return false;
+        return true;
     }
 
     @Override
     public void onNestedPreScroll(@NonNull CoordinatorLayout parent, @NonNull View child,
                                   @NonNull View target, int dx, int dy,
                                   @NonNull int[] consumed, int type) {
+        if (target.getParent() != parent) {
+            return;
+        }
         if (target == child) {
             // both target view and child view is top view
             if (dy < 0) {
-                View bottomView = findBottomView(parent);
-                if (bottomView != null) {
-                    if (child.getTop() <= dy) {
-                        setTopAndBottomOffset(child.getTop() - dy - getLayoutTop());
-                        consumed[1] += dy;
-                    } else if (child.getTop() < 0) {
-                        int top = child.getTop();
-                        setTopAndBottomOffset(0 - getLayoutTop());
-                        consumed[1] += top;
-                    }
+                if (child.getTop() <= dy) {
+                    setTopAndBottomOffset(child.getTop() - dy - getLayoutTop());
+                    consumed[1] += dy;
+                } else if (child.getTop() < 0) {
+                    int top = child.getTop();
+                    setTopAndBottomOffset(0 - getLayoutTop());
+                    consumed[1] += top;
                 }
             }
         } else {
@@ -267,19 +302,20 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
                 // child is topView, target is bottomView
                 if (target instanceof IQMUIContinuousNestedBottomView) {
                     int contentHeight = ((IQMUIContinuousNestedBottomView) target).getContentHeight();
-                    int minOffset = -child.getHeight();
+                    int minOffset;
                     if (contentHeight != IQMUIContinuousNestedBottomView.HEIGHT_IS_ENOUGH_TO_SCROLL) {
                         minOffset = parent.getHeight() - contentHeight - child.getHeight();
+                    } else {
+                        minOffset = parent.getHeight() - child.getHeight() - target.getHeight();
                     }
-                    if (child.getTop() - dy >= minOffset)
-                        if (child.getTop() - dy >= minOffset) {
-                            setTopAndBottomOffset(child.getTop() - dy - getLayoutTop());
-                            consumed[1] += dy;
-                        } else if (child.getTop() > minOffset) {
-                            int distance = child.getTop() - minOffset;
-                            setTopAndBottomOffset(minOffset);
-                            consumed[1] += distance;
-                        }
+                    if (child.getTop() - dy >= minOffset) {
+                        setTopAndBottomOffset(child.getTop() - dy - getLayoutTop());
+                        consumed[1] += dy;
+                    } else if (child.getTop() > minOffset) {
+                        int distance = child.getTop() - minOffset;
+                        setTopAndBottomOffset(minOffset);
+                        consumed[1] += distance;
+                    }
                 }
             }
         }
@@ -288,29 +324,39 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
     @Override
     public void onNestedScroll(@NonNull CoordinatorLayout parent, @NonNull View child,
                                @NonNull View target, int dxConsumed, int dyConsumed,
-                               int dxUnconsumed, int dyUnconsumed,
-                               int type, @NonNull int[] consumed) {
+                               int dxUnconsumed, int dyUnconsumed, int type) {
+        if (target.getParent() != parent) {
+            return;
+        }
         if (target == child) {
             // both target view and child view is top view
             if (dyUnconsumed > 0) {
                 View bottomView = findBottomView(parent);
-                if (bottomView != null) {
+                if (bottomView == null || bottomView.getVisibility() == View.GONE) {
+                    int parentBottom = parent.getHeight();
+                    if (target.getBottom() - parentBottom >= dyUnconsumed) {
+                        setTopAndBottomOffset(target.getTop() - dyUnconsumed - getLayoutTop());
+                    } else if (target.getBottom() - parentBottom > 0) {
+                        int moveDistance = target.getBottom() - parentBottom;
+                        setTopAndBottomOffset(target.getTop() - moveDistance - getLayoutTop());
+                    }
+                } else {
                     int contentHeight = ((IQMUIContinuousNestedBottomView) bottomView).getContentHeight();
                     int minBottom = parent.getHeight();
                     boolean canContentScroll = true;
                     if (contentHeight != IQMUIContinuousNestedBottomView.HEIGHT_IS_ENOUGH_TO_SCROLL) {
-                        minBottom = parent.getHeight() + parent.getHeight() - contentHeight;
+                        minBottom = parent.getHeight() + bottomView.getHeight() - contentHeight;
                         canContentScroll = false;
                     }
                     if (bottomView.getBottom() - minBottom > dyUnconsumed) {
                         setTopAndBottomOffset(target.getTop() - dyUnconsumed - getLayoutTop());
+                        return;
                     } else if (bottomView.getBottom() - minBottom > 0) {
                         int moveDistance = bottomView.getBottom() - minBottom;
                         setTopAndBottomOffset(target.getTop() - moveDistance - getLayoutTop());
-                        if (canContentScroll) {
-                            ((IQMUIContinuousNestedBottomView) bottomView).consumeScroll(dyUnconsumed - moveDistance);
-                        }
-                    } else if (canContentScroll) {
+                        dyUnconsumed = dyUnconsumed == Integer.MAX_VALUE ? dyUnconsumed : (dyUnconsumed - moveDistance);
+                    }
+                    if (canContentScroll) {
                         ((IQMUIContinuousNestedBottomView) bottomView).consumeScroll(dyUnconsumed);
                     }
                 }
@@ -320,14 +366,14 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
             if (dyUnconsumed < 0) {
                 if (child.getTop() <= dyUnconsumed) {
                     setTopAndBottomOffset(child.getTop() - dyUnconsumed - getLayoutTop());
-                    consumed[1] += dyUnconsumed;
+                    return;
                 } else if (child.getTop() < 0) {
                     int top = child.getTop();
                     setTopAndBottomOffset(0 - getLayoutTop());
-                    int innerUnConsumed = ((IQMUIContinuousNestedTopView) child).consumeScroll(dyUnconsumed - top);
-                    consumed[1] += dyUnconsumed - innerUnConsumed;
-                } else if (child instanceof IQMUIContinuousNestedTopView) {
-                    consumed[1] += dyUnconsumed - ((IQMUIContinuousNestedTopView) child).consumeScroll(dyUnconsumed);
+                    dyUnconsumed = dyUnconsumed == Integer.MIN_VALUE ? dyConsumed : (dyUnconsumed - top);
+                }
+                if (child instanceof IQMUIContinuousNestedTopView) {
+                    ((IQMUIContinuousNestedTopView) child).consumeScroll(dyUnconsumed);
                 }
             }
         }
@@ -382,8 +428,21 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
                 int unconsumedY = y - mLastFlingY;
                 mLastFlingY = y;
                 if (mCurrentParent != null && mCurrentChild != null) {
-                    scroll(mCurrentParent, mCurrentChild, unconsumedY);
-                    postOnAnimation();
+                    boolean canScroll = true;
+                    if(mCurrentParent instanceof QMUIContinuousNestedScrollLayout){
+                        QMUIContinuousNestedScrollLayout layout = (QMUIContinuousNestedScrollLayout) mCurrentParent;
+                        if(unconsumedY > 0 && layout.getCurrentScroll() >= layout.getScrollRange()){
+                            canScroll = false;
+                        }else if(unconsumedY < 0 && layout.getCurrentScroll() <= 0){
+                            canScroll = false;
+                        }
+                    }
+                    if(canScroll){
+                        scroll(mCurrentParent, mCurrentChild, unconsumedY);
+                        postOnAnimation();
+                    }else{
+                        mOverScroller.abortAnimation();
+                    }
                 }
             }
 
@@ -391,7 +450,9 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
             if (mReSchedulePostAnimationCallback) {
                 internalPostOnAnimation();
             } else {
+                mCurrentParent = null;
                 mCurrentChild = null;
+                onFlingOrScrollEnd();
             }
         }
 
@@ -412,6 +473,23 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
         }
 
         public void fling(CoordinatorLayout parent, View child, int velocityY) {
+            onFlingOrScrollStart(parent, child);
+            mOverScroller.fling(0, 0, 0, velocityY,
+                    Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE);
+            postOnAnimation();
+        }
+
+        public void startScroll(CoordinatorLayout parent, View child, int dy, int duration) {
+            onFlingOrScrollStart(parent, child);
+            mOverScroller.startScroll(0, 0, 0, dy, duration);
+            postOnAnimation();
+        }
+
+        private void onFlingOrScrollStart(CoordinatorLayout parent, View child) {
+            isInFlingOrScroll = true;
+            if (mCallback != null) {
+                mCallback.onTopBehaviorFlingOrScrollStart();
+            }
             mCurrentParent = parent;
             mCurrentChild = child;
             mLastFlingY = 0;
@@ -422,9 +500,6 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
                 mInterpolator = QUNITIC_INTERPOLATOR;
                 mOverScroller = new OverScroller(mCurrentParent.getContext(), QUNITIC_INTERPOLATOR);
             }
-            mOverScroller.fling(0, 0, 0, velocityY,
-                    Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE);
-            postOnAnimation();
         }
 
 
@@ -435,6 +510,14 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
             mOverScroller.abortAnimation();
             mCurrentChild = null;
             mCurrentParent = null;
+            onFlingOrScrollEnd();
+        }
+
+        private void onFlingOrScrollEnd() {
+            if (mCallback != null && isInFlingOrScroll) {
+                mCallback.onTopBehaviorFlingOrScrollEnd();
+            }
+            isInFlingOrScroll = false;
         }
     }
 
@@ -449,5 +532,13 @@ public class QMUIContinuousNestedTopAreaBehavior extends QMUIViewOffsetBehavior<
 
     public interface Callback {
         void onTopAreaOffset(int offset);
+
+        void onTopBehaviorTouchBegin();
+
+        void onTopBehaviorTouchEnd();
+
+        void onTopBehaviorFlingOrScrollStart();
+
+        void onTopBehaviorFlingOrScrollEnd();
     }
 }

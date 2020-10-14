@@ -24,10 +24,12 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ImageView;
 
+import com.qmuiteam.qmui.skin.QMUISkinManager;
 import com.qmuiteam.qmui.util.QMUIDisplayHelper;
 import com.qmuiteam.qmui.util.QMUIDrawableHelper;
 import com.qmuiteam.qmui.util.QMUIViewHelper;
 import com.qmuiteam.qmui.widget.QMUITopBar;
+import com.qmuiteam.qmui.widget.QMUITopBarLayout;
 import com.qmuiteam.qmui.widget.dialog.QMUIDialog;
 import com.qmuiteam.qmui.widget.roundwidget.QMUIRoundButton;
 import com.qmuiteam.qmuidemo.R;
@@ -49,7 +51,7 @@ import butterknife.ButterKnife;
 @Widget(group = Group.Helper, widgetClass = QMUIDrawableHelper.class, iconRes = R.mipmap.icon_grid_drawable_helper)
 public class QDDrawableHelperFragment extends BaseFragment {
 
-    @BindView(R.id.topbar) QMUITopBar mTopBar;
+    @BindView(R.id.topbar) QMUITopBarLayout mTopBar;
     @BindView(R.id.createFromView) QMUIRoundButton mCreateFromViewButton;
     @BindView(R.id.solidImage) ImageView mSolidImageView;
     @BindView(R.id.circleGradient) ImageView mCircleGradientView;
@@ -117,6 +119,7 @@ public class QDDrawableHelperFragment extends BaseFragment {
             @Override
             public void onClick(View v) {
                 QMUIDialog.CustomDialogBuilder dialogBuilder = new QMUIDialog.CustomDialogBuilder(getContext());
+                dialogBuilder.setSkinManager(QMUISkinManager.defaultInstance(getContext()));
                 dialogBuilder.setLayout(R.layout.drawablehelper_createfromview);
                 final QMUIDialog dialog = dialogBuilder.setTitle("示例效果（点击下图关闭本浮层）").create();
                 ImageView displayImageView = (ImageView) dialog.findViewById(R.id.createFromViewDisplay);

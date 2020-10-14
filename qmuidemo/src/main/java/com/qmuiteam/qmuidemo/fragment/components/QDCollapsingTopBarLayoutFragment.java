@@ -27,6 +27,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 
+import com.qmuiteam.qmui.layout.QMUIConstraintLayout;
 import com.qmuiteam.qmui.widget.QMUICollapsingTopBarLayout;
 import com.qmuiteam.qmui.widget.QMUITopBar;
 import com.qmuiteam.qmuidemo.fragment.components.viewpager.QDLazyTestObserver;
@@ -71,6 +72,13 @@ public class QDCollapsingTopBarLayoutFragment extends BaseFragment {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
                 Log.i(TAG, "scrim: " + animation.getAnimatedValue());
+            }
+        });
+
+        mCollapsingTopBarLayout.addOnOffsetUpdateListener(new QMUICollapsingTopBarLayout.OnOffsetUpdateListener() {
+            @Override
+            public void onOffsetChanged(QMUICollapsingTopBarLayout layout, int offset, float expandFraction) {
+                Log.i(TAG, "offset = " + offset + "; expandFraction = " + expandFraction);
             }
         });
 

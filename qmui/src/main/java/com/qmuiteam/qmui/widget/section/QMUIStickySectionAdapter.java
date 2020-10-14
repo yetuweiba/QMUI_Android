@@ -52,14 +52,34 @@ public abstract class QMUIStickySectionAdapter<
 
     private Callback<H, T> mCallback;
     private ViewCallback mViewCallback;
+    private final boolean mRemoveSectionTitleIfOnlyOneSection;
+
+
+    public QMUIStickySectionAdapter() {
+        this(false);
+    }
+
+    public QMUIStickySectionAdapter(boolean removeSectionTitleIfOnlyOneSection) {
+        mRemoveSectionTitleIfOnlyOneSection = removeSectionTitleIfOnlyOneSection;
+    }
 
     /**
-     * see {@link #setData(List, boolean)}
+     * see {@link #setData(List, boolean, boolean)}
      *
      * @param data section list
      */
     public final void setData(@Nullable List<QMUISection<H, T>> data) {
         setData(data, true);
+    }
+
+    /**
+     * see {@link #setData(List, boolean, boolean)}
+     *
+     * @param data section list
+     * @param onlyMutateState This is used to backup for next diff. True to use shallow copy, false tp use deep copy.
+     */
+    public final void setData(@Nullable List<QMUISection<H, T>> data, boolean onlyMutateState){
+        setData(data, onlyMutateState, true);
     }
 
     /**
@@ -74,8 +94,9 @@ public abstract class QMUIStickySectionAdapter<
      *
      * @param data            section list
      * @param onlyMutateState This is used to backup for next diff. True to use shallow copy, false tp use deep copy.
+     * @param checkLock       check section lock
      */
-    public final void setData(@Nullable List<QMUISection<H, T>> data, boolean onlyMutateState) {
+    public final void setData(@Nullable List<QMUISection<H, T>> data, boolean onlyMutateState, boolean checkLock) {
         mLoadingBeforeSections.clear();
         mLoadingAfterSections.clear();
         mCurrentData.clear();
@@ -83,6 +104,9 @@ public abstract class QMUIStickySectionAdapter<
             mCurrentData.addAll(data);
         }
         beforeDiffInSet(mBackupData, mCurrentData);
+        if(!mCurrentData.isEmpty() && checkLock){
+            lock(mCurrentData.get(0));
+        }
         diff(true, onlyMutateState);
     }
 
@@ -100,21 +124,35 @@ public abstract class QMUIStickySectionAdapter<
     }
 
     /**
+     *
+     * @param data              section list
+     * @param onlyMutateState   this is used to backup for next diff. True to use shallow copy, false tp use deep copy.
+     */
+    public final void setDataWithoutDiff(@Nullable List<QMUISection<H, T>> data, boolean onlyMutateState){
+        setDataWithoutDiff(data, onlyMutateState, true);
+    }
+
+    /**
      * same as {@link #setData(List, boolean)}, but do't use {@link DiffUtil},
      * use {@link #notifyDataSetChanged()} directly.
      *
      * @param data            section list
-     * @param onlyMutateState his is used to backup for next diff. True to use shallow copy, false tp use deep copy.
+     * @param onlyMutateState this is used to backup for next diff. True to use shallow copy, false tp use deep copy.
+     * @param checkLock       check section lock
      */
-    public final void setDataWithoutDiff(@Nullable List<QMUISection<H, T>> data, boolean onlyMutateState) {
+    public final void setDataWithoutDiff(@Nullable List<QMUISection<H, T>> data, boolean onlyMutateState, boolean checkLock) {
         mLoadingBeforeSections.clear();
         mLoadingAfterSections.clear();
         mCurrentData.clear();
         if (data != null) {
             mCurrentData.addAll(data);
         }
+        if(checkLock && !mCurrentData.isEmpty()){
+            lock(mCurrentData.get(0));
+        }
         // only used to generate index info
         QMUISectionDiffCallback callback = createDiffCallback(mBackupData, mCurrentData);
+        callback.generateIndex(mRemoveSectionTitleIfOnlyOneSection);
         callback.cloneNewIndexTo(mSectionIndex, mItemIndex);
         notifyDataSetChanged();
         mBackupData.clear();
@@ -125,6 +163,7 @@ public abstract class QMUIStickySectionAdapter<
 
     private void diff(boolean newDataSet, boolean onlyMutateState) {
         QMUISectionDiffCallback callback = createDiffCallback(mBackupData, mCurrentData);
+        callback.generateIndex(mRemoveSectionTitleIfOnlyOneSection);
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(callback, false);
         callback.cloneNewIndexTo(mSectionIndex, mItemIndex);
         diffResult.dispatchUpdatesTo(this);
@@ -146,15 +185,17 @@ public abstract class QMUIStickySectionAdapter<
     /**
      * section data is not changed, only custom item index may changed, so we also need to regenerate index
      */
-    public void refreshCustomData(){
+    public void refreshCustomData() {
         QMUISectionDiffCallback callback = createDiffCallback(mBackupData, mCurrentData);
+        callback.generateIndex(mRemoveSectionTitleIfOnlyOneSection);
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(callback, false);
         callback.cloneNewIndexTo(mSectionIndex, mItemIndex);
         diffResult.dispatchUpdatesTo(this);
     }
 
     protected QMUISectionDiffCallback<H, T> createDiffCallback(
-            List<QMUISection<H, T>> lastData, List<QMUISection<H, T>> currentData) {
+            List<QMUISection<H, T>> lastData,
+            List<QMUISection<H, T>> currentData) {
         return new QMUISectionDiffCallback<>(lastData, currentData);
     }
 
@@ -166,6 +207,10 @@ public abstract class QMUIStickySectionAdapter<
         mViewCallback = viewCallback;
     }
 
+
+    public int getSectionCount() {
+        return mCurrentData.size();
+    }
 
     public int getItemIndex(int position) {
         if (position < 0 || position >= mItemIndex.size()) {
@@ -272,16 +317,39 @@ public abstract class QMUIStickySectionAdapter<
                 && !section.isErrorToLoadAfter();
 
         int index = mCurrentData.indexOf(section);
-        if (index < 0) {
+        if (index < 0 || index >= mCurrentData.size()) {
             return;
         }
         section.setLocked(false);
-        for (int i = 0; i < mCurrentData.size(); i++) {
-            if (i < index) {
-                mCurrentData.get(i).setLocked(lockPrevious);
-            } else if (i > index) {
-                mCurrentData.get(i).setLocked(lockAfter);
+        lockBefore(index - 1, lockPrevious);
+        lockAfter(index + 1, lockAfter);
+    }
+
+    private void lockBefore(int current, boolean needLock) {
+        while (current >= 0) {
+            QMUISection<H, T> section = mCurrentData.get(current);
+            if (needLock) {
+                section.setLocked(true);
+            } else {
+                section.setLocked(false);
+                needLock = !section.isFold() && section.isExistBeforeDataToLoad()
+                        && !section.isErrorToLoadBefore();
             }
+            current--;
+        }
+    }
+
+    private void lockAfter(int current, boolean needLock) {
+        while (current < mCurrentData.size()) {
+            QMUISection<H, T> section = mCurrentData.get(current);
+            if (needLock) {
+                section.setLocked(true);
+            } else {
+                section.setLocked(false);
+                needLock = !section.isFold() && section.isExistAfterDataToLoad()
+                        && !section.isErrorToLoadAfter();
+            }
+            current++;
         }
     }
 
@@ -383,6 +451,7 @@ public abstract class QMUIStickySectionAdapter<
 
     /**
      * only for custom item
+     *
      * @param sectionIndex
      * @param customItemIndex
      * @param unFoldTargetSection
@@ -395,6 +464,7 @@ public abstract class QMUIStickySectionAdapter<
 
     /**
      * find position by sectionIndex and itemIndex
+     *
      * @param sectionIndex
      * @param itemIndex
      * @param unFoldTargetSection
@@ -422,6 +492,7 @@ public abstract class QMUIStickySectionAdapter<
 
     /**
      * find position by positionFinder
+     *
      * @param positionFinder
      * @param unFoldTargetSection
      * @return
@@ -515,6 +586,10 @@ public abstract class QMUIStickySectionAdapter<
             }
         }
         return position;
+    }
+
+    public boolean isRemoveSectionTitleIfOnlyOneSection() {
+        return mRemoveSectionTitleIfOnlyOneSection;
     }
 
     @Override

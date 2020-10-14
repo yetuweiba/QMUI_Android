@@ -110,10 +110,8 @@ public class QDNotchHelperFragment extends BaseFragment {
     }
 
     private void initTabs() {
-        int normalColor = QMUIResHelper.getAttrColor(getContext(), R.attr.qmui_config_color_gray_6);
-        int selectColor = QMUIResHelper.getAttrColor(getContext(), R.attr.qmui_config_color_blue);
         QMUITabBuilder builder = mTabSegment.tabBuilder();
-        builder.setColor(normalColor, selectColor)
+        builder.setColorAttr(R.attr.qmui_config_color_gray_6, R.attr.qmui_config_color_blue)
                 .setSelectedIconScale(2f)
                 .setTextSize(QMUIDisplayHelper.sp2px(getContext(), 14), QMUIDisplayHelper.sp2px(getContext(), 16))
                 .setDynamicChangeIconColor(false);
@@ -121,17 +119,17 @@ public class QDNotchHelperFragment extends BaseFragment {
                 .setNormalDrawable(ContextCompat.getDrawable(getContext(), R.mipmap.icon_tabbar_component))
                 .setSelectedDrawable(ContextCompat.getDrawable(getContext(), R.mipmap.icon_tabbar_component_selected))
                 .setText("Components")
-                .build();
+                .build(getContext());
         QMUITab util = builder
                 .setNormalDrawable(ContextCompat.getDrawable(getContext(), R.mipmap.icon_tabbar_util))
                 .setSelectedDrawable(ContextCompat.getDrawable(getContext(), R.mipmap.icon_tabbar_util_selected))
                 .setText("Helper")
-                .build();
+                .build(getContext());
         QMUITab lab = builder
                 .setNormalDrawable(ContextCompat.getDrawable(getContext(), R.mipmap.icon_tabbar_lab))
                 .setSelectedDrawable(ContextCompat.getDrawable(getContext(), R.mipmap.icon_tabbar_lab_selected))
                 .setText("Lab")
-                .build();
+                .build(getContext());
 
         mTabSegment.addTab(component)
                 .addTab(util)

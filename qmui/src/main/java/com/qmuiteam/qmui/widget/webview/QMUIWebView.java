@@ -18,6 +18,7 @@ package com.qmuiteam.qmui.widget.webview;
 
 import android.content.Context;
 import android.graphics.Rect;
+import android.os.Build;
 import androidx.annotation.NonNull;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -54,8 +55,6 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
     private boolean mNeedDispatchSafeAreaInset = false;
     private Callback mCallback;
     private List<OnScrollChangeListener> mOnScrollChangeListeners = new ArrayList<>();
-    private QMUIWindowInsetHelper mWindowInsetHelper;
-
 
     public QMUIWebView(Context context) {
         super(context);
@@ -76,7 +75,7 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
         removeJavascriptInterface("searchBoxJavaBridge_");
         removeJavascriptInterface("accessibility");
         removeJavascriptInterface("accessibilityTraversal");
-        mWindowInsetHelper = new QMUIWindowInsetHelper(this, this);
+        QMUIWindowInsetHelper.apply(this);
     }
 
     @Override
@@ -97,6 +96,10 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
 
     public void removeOnScrollChangeListener(OnScrollChangeListener listener) {
         mOnScrollChangeListeners.remove(listener);
+    }
+
+    public void removeAllOnScrollChangeListener(){
+        mOnScrollChangeListeners.clear();
     }
 
     @Override
@@ -159,25 +162,15 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
     }
 
     @Override
-    public boolean applySystemWindowInsets21(Object insets) {
+    public WindowInsetsCompat applySystemWindowInsets21(WindowInsetsCompat insets) {
         if (!mNeedDispatchSafeAreaInset) {
-            return false;
+            return insets;
         }
         float density = QMUIDisplayHelper.getDensity(getContext());
-        int left, top, right, bottom;
-        if (QMUINotchHelper.isNotchOfficialSupport()) {
-            WindowInsets windowInsets = (WindowInsets) insets;
-            left = windowInsets.getSystemWindowInsetLeft();
-            top = windowInsets.getSystemWindowInsetTop();
-            right = windowInsets.getSystemWindowInsetRight();
-            bottom = windowInsets.getSystemWindowInsetBottom();
-        } else {
-            WindowInsetsCompat insetsCompat = (WindowInsetsCompat) insets;
-            left = insetsCompat.getSystemWindowInsetLeft();
-            top = insetsCompat.getSystemWindowInsetTop();
-            right = insetsCompat.getSystemWindowInsetRight();
-            bottom = insetsCompat.getSystemWindowInsetBottom();
-        }
+        int left = insets.getSystemWindowInsetLeft();
+        int top = insets.getSystemWindowInsetTop();
+        int right = insets.getSystemWindowInsetRight();
+        int bottom = insets.getSystemWindowInsetBottom();
         Rect rect = new Rect(
                 (int) (left / density + getExtraInsetLeft(density)),
                 (int) (top / density + getExtraInsetTop(density)),
@@ -185,7 +178,7 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
                 (int) (bottom / density + getExtraInsetBottom(density))
         );
         setStyleDisplayCutoutSafeArea(rect);
-        return true;
+        return insets.consumeSystemWindowInsets();
     }
 
     protected int getExtraInsetTop(float density) {
@@ -214,7 +207,7 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
     }
 
     private void setStyleDisplayCutoutSafeArea(@NonNull Rect rect) {
-        if (sIsReflectionOccurError) {
+        if (sIsReflectionOccurError || Build.VERSION.SDK_INT <= Build.VERSION_CODES.N) {
             return;
         }
 
@@ -325,11 +318,8 @@ public class QMUIWebView extends WebView implements IWindowInsetLayout {
 
     private Method getSetDisplayCutoutSafeAreaMethodInWebContents(Object webContents) {
         try {
-            Method setDisplayCutoutSafeAreaMethod = webContents.getClass()
+           return webContents.getClass()
                     .getDeclaredMethod("setDisplayCutoutSafeArea", Rect.class);
-            if (setDisplayCutoutSafeAreaMethod != null) {
-                return setDisplayCutoutSafeAreaMethod;
-            }
         } catch (NoSuchMethodException ignored) {
 
         }

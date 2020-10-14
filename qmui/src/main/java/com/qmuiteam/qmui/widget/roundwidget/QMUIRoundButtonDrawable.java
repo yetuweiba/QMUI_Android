@@ -69,11 +69,11 @@ public class QMUIRoundButtonDrawable extends GradientDrawable {
      * 设置按钮的描边粗细和颜色
      */
     public void setStrokeData(int width, @Nullable ColorStateList colors) {
+        mStrokeWidth = width;
+        mStrokeColors = colors;
         if (hasNativeStateListAPI()) {
             super.setStroke(width, colors);
         } else {
-            mStrokeWidth = width;
-            mStrokeColors = colors;
             final int currentColor;
             if (colors == null) {
                 currentColor = Color.TRANSPARENT;
@@ -82,6 +82,14 @@ public class QMUIRoundButtonDrawable extends GradientDrawable {
             }
             setStroke(width, currentColor);
         }
+    }
+
+    public int getStrokeWidth(){
+        return mStrokeWidth;
+    }
+
+    public void setStrokeColors(@Nullable ColorStateList colors){
+        setStrokeData(mStrokeWidth, colors);
     }
 
     private boolean hasNativeStateListAPI() {

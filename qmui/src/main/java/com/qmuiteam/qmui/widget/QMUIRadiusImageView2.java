@@ -26,13 +26,13 @@ import android.graphics.PorterDuffColorFilter;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 
+import androidx.annotation.ColorInt;
+import androidx.appcompat.widget.AppCompatImageView;
+
 import com.qmuiteam.qmui.R;
 import com.qmuiteam.qmui.alpha.QMUIAlphaViewHelper;
 import com.qmuiteam.qmui.layout.IQMUILayout;
 import com.qmuiteam.qmui.layout.QMUILayoutHelper;
-
-import androidx.annotation.ColorInt;
-import androidx.appcompat.widget.AppCompatImageView;
 
 /**
  * shown image in radius view, is different to {@link QMUIRadiusImageView}
@@ -55,6 +55,7 @@ public class QMUIRadiusImageView2 extends AppCompatImageView implements IQMUILay
     private boolean mIsTouchSelectModeEnabled = true;
     private ColorFilter mColorFilter;
     private ColorFilter mSelectedColorFilter;
+    private boolean mIsInOnTouchEvent = false;
 
     public QMUIRadiusImageView2(Context context) {
         super(context);
@@ -72,7 +73,6 @@ public class QMUIRadiusImageView2 extends AppCompatImageView implements IQMUILay
     }
 
     private void init(Context context, AttributeSet attrs, int defStyleAttr) {
-        setScaleType(ScaleType.CENTER_CROP);
         mLayoutHelper = new QMUILayoutHelper(context, attrs, defStyleAttr, this);
         setChangeAlphaWhenPress(false);
         setChangeAlphaWhenDisable(false);
@@ -100,6 +100,9 @@ public class QMUIRadiusImageView2 extends AppCompatImageView implements IQMUILay
                     R.styleable.QMUIRadiusImageView2_qmui_corner_radius, 0));
         }
         array.recycle();
+
+        mLayoutHelper.setBorderWidth(mBorderWidth);
+        mLayoutHelper.setBorderColor(mBorderColor);
     }
 
 
@@ -263,6 +266,26 @@ public class QMUIRadiusImageView2 extends AppCompatImageView implements IQMUILay
     public void onlyShowRightDivider(int rightInsetTop, int rightInsetBottom, int rightDividerWidth, int rightDividerColor) {
         mLayoutHelper.onlyShowRightDivider(rightInsetTop, rightInsetBottom, rightDividerWidth, rightDividerColor);
         invalidate();
+    }
+
+    @Override
+    public void updateBottomSeparatorColor(int color) {
+        mLayoutHelper.updateBottomSeparatorColor(color);
+    }
+
+    @Override
+    public void updateLeftSeparatorColor(int color) {
+        mLayoutHelper.updateLeftSeparatorColor(color);
+    }
+
+    @Override
+    public void updateRightSeparatorColor(int color) {
+        mLayoutHelper.updateRightSeparatorColor(color);
+    }
+
+    @Override
+    public void updateTopSeparatorColor(int color) {
+        mLayoutHelper.updateTopSeparatorColor(color);
     }
 
     @Override
@@ -471,7 +494,9 @@ public class QMUIRadiusImageView2 extends AppCompatImageView implements IQMUILay
 
     @Override
     public void setSelected(boolean selected) {
-        super.setSelected(selected);
+        if (!mIsInOnTouchEvent) {
+            super.setSelected(selected);
+        }
         if (mIsSelected != selected) {
             mIsSelected = selected;
             if (mIsSelected) {
@@ -519,24 +544,48 @@ public class QMUIRadiusImageView2 extends AppCompatImageView implements IQMUILay
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (!this.isClickable()) {
-            this.setSelected(false);
             return super.onTouchEvent(event);
+        } else if (mIsTouchSelectModeEnabled) {
+            mIsInOnTouchEvent = true;
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    this.setSelected(true);
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_SCROLL:
+                case MotionEvent.ACTION_OUTSIDE:
+                case MotionEvent.ACTION_CANCEL:
+                    this.setSelected(false);
+                    break;
+            }
+            mIsInOnTouchEvent = false;
         }
 
-        if (!mIsTouchSelectModeEnabled) {
-            return super.onTouchEvent(event);
-        }
-        switch (event.getAction()) {
-            case MotionEvent.ACTION_DOWN:
-                this.setSelected(true);
-                break;
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_SCROLL:
-            case MotionEvent.ACTION_OUTSIDE:
-            case MotionEvent.ACTION_CANCEL:
-                this.setSelected(false);
-                break;
-        }
         return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean hasBorder() {
+        return mLayoutHelper.hasBorder();
+    }
+
+    @Override
+    public boolean hasLeftSeparator() {
+        return mLayoutHelper.hasLeftSeparator();
+    }
+
+    @Override
+    public boolean hasTopSeparator() {
+        return mLayoutHelper.hasTopSeparator();
+    }
+
+    @Override
+    public boolean hasRightSeparator() {
+        return mLayoutHelper.hasRightSeparator();
+    }
+
+    @Override
+    public boolean hasBottomSeparator() {
+        return mLayoutHelper.hasBottomSeparator();
     }
 }

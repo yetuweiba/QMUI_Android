@@ -23,6 +23,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Toast;
 
+import com.qmuiteam.qmui.recyclerView.QMUIRVDraggableScrollBar;
 import com.qmuiteam.qmui.widget.QMUITopBarLayout;
 import com.qmuiteam.qmui.widget.dialog.QMUIBottomSheet;
 import com.qmuiteam.qmui.widget.pullRefreshLayout.QMUIPullRefreshLayout;
@@ -83,12 +84,6 @@ public abstract class QDBaseSectionLayoutFragment extends BaseFragment {
     }
 
     private void initRefreshLayout() {
-        mPullRefreshLayout.setChildScrollUpCallback(new QMUIPullRefreshLayout.OnChildScrollUpCallback() {
-            @Override
-            public boolean canChildScrollUp(QMUIPullRefreshLayout parent, @Nullable View child) {
-                return QMUIPullRefreshLayout.defaultCanScrollUp(mSectionLayout.getRecyclerView());
-            }
-        });
         mPullRefreshLayout.setOnPullListener(new QMUIPullRefreshLayout.OnPullListener() {
             @Override
             public void onMoveTarget(int offset) {
@@ -115,6 +110,9 @@ public abstract class QDBaseSectionLayoutFragment extends BaseFragment {
     protected void initStickyLayout() {
         mLayoutManager = createLayoutManager();
         mSectionLayout.setLayoutManager(mLayoutManager);
+        QMUIRVDraggableScrollBar scrollBar = new QMUIRVDraggableScrollBar(0, 0, 0);
+        scrollBar.setEnableScrollBarFadeInOut(false);
+        scrollBar.attachToStickSectionLayout(mSectionLayout);
     }
 
     private void initData() {
@@ -150,7 +148,7 @@ public abstract class QDBaseSectionLayoutFragment extends BaseFragment {
         mSectionLayout.setAdapter(mAdapter, true);
         ArrayList<QMUISection<SectionHeader, SectionItem>> list = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
-            list.add(createSection("header " + i, i % 2 == 0));
+            list.add(createSection("header " + i, i%2 != 0));
         }
         mAdapter.setData(list);
     }
@@ -163,7 +161,7 @@ public abstract class QDBaseSectionLayoutFragment extends BaseFragment {
         }
         QMUISection<SectionHeader, SectionItem> section = new QMUISection<>(header, contents, isFold);
         // if test load more, you can open the code
-//        section.setExistAfterDataToLoad(true);
+        section.setExistAfterDataToLoad(true);
 //        section.setExistBeforeDataToLoad(true);
         return section;
     }

@@ -17,23 +17,23 @@
 package com.qmuiteam.qmui.widget;
 
 import android.content.Context;
-import android.content.res.TypedArray;
-import android.graphics.Color;
-import android.graphics.drawable.Drawable;
-import androidx.core.content.ContextCompat;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
-import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.collection.SimpleArrayMap;
 
 import com.qmuiteam.qmui.R;
 import com.qmuiteam.qmui.alpha.QMUIAlphaImageButton;
-import com.qmuiteam.qmui.util.QMUIDrawableHelper;
-import com.qmuiteam.qmui.util.QMUIResHelper;
-import com.qmuiteam.qmui.util.QMUIViewHelper;
+import com.qmuiteam.qmui.layout.QMUIFrameLayout;
+import com.qmuiteam.qmui.qqface.QMUIQQFaceView;
+import com.qmuiteam.qmui.skin.QMUISkinValueBuilder;
+import com.qmuiteam.qmui.skin.defaultAttr.IQMUISkinDefaultAttrProvider;
 
 /**
  * 这是一个对 {@link QMUITopBar} 的代理类，需要它的原因是：
@@ -47,13 +47,9 @@ import com.qmuiteam.qmui.util.QMUIViewHelper;
  * @date 2016-11-26
  */
 
-public class QMUITopBarLayout extends FrameLayout {
+public class QMUITopBarLayout extends QMUIFrameLayout implements IQMUISkinDefaultAttrProvider {
     private QMUITopBar mTopBar;
-    private Drawable mTopBarBgWithSeparatorDrawableCache;
-
-    private int mTopBarSeparatorColor;
-    private int mTopBarBgColor;
-    private int mTopBarSeparatorHeight;
+    private SimpleArrayMap<String, Integer> mDefaultSkinAttrs = new SimpleArrayMap<>(2);
 
     public QMUITopBarLayout(Context context) {
         this(context, null);
@@ -65,52 +61,53 @@ public class QMUITopBarLayout extends FrameLayout {
 
     public QMUITopBarLayout(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        TypedArray array = getContext().obtainStyledAttributes(attrs, R.styleable.QMUITopBar, R.attr.QMUITopBarStyle, 0);
-        mTopBarSeparatorColor = array.getColor(R.styleable.QMUITopBar_qmui_topbar_separator_color,
-                ContextCompat.getColor(context, R.color.qmui_config_color_separator));
-        mTopBarSeparatorHeight = array.getDimensionPixelSize(R.styleable.QMUITopBar_qmui_topbar_separator_height, 1);
-        mTopBarBgColor = array.getColor(R.styleable.QMUITopBar_qmui_topbar_bg_color, Color.WHITE);
-        boolean hasSeparator = array.getBoolean(R.styleable.QMUITopBar_qmui_topbar_need_separator, true);
-
-        // 构造一个透明的背景且无分隔线的TopBar，背景与分隔线有QMUITopBarLayout控制
-        mTopBar = new QMUITopBar(context, true);
-        mTopBar.getCommonFieldFormTypedArray(context, array);
+        mDefaultSkinAttrs.put(QMUISkinValueBuilder.BOTTOM_SEPARATOR, R.attr.qmui_skin_support_topbar_separator_color);
+        mDefaultSkinAttrs.put(QMUISkinValueBuilder.BACKGROUND, R.attr.qmui_skin_support_topbar_bg);
+        mTopBar = new QMUITopBar(context, attrs, defStyleAttr);
+        mTopBar.setBackground(null);
+        mTopBar.setVisibility(View.VISIBLE);
+        mTopBar.updateBottomDivider(0, 0, 0, 0);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                QMUIResHelper.getAttrDimen(context, R.attr.qmui_topbar_height));
+                ViewGroup.LayoutParams.MATCH_PARENT, mTopBar.getTopBarHeight());
         addView(mTopBar, lp);
+    }
 
-        array.recycle();
-
-        setBackgroundDividerEnabled(hasSeparator);
+    public QMUITopBar getTopBar() {
+        return mTopBar;
     }
 
     public void setCenterView(View view) {
         mTopBar.setCenterView(view);
     }
 
-    public TextView setTitle(int resId) {
+    public QMUIQQFaceView setTitle(int resId) {
         return mTopBar.setTitle(resId);
     }
 
-    public TextView setTitle(String title) {
+    public QMUIQQFaceView setTitle(String title) {
         return mTopBar.setTitle(title);
     }
 
-    public TextView setEmojiTitle(String title) {
-        return mTopBar.setEmojiTitle(title);
-    }
-
-    public void showTitlteView(boolean toShow) {
+    public void showTitleView(boolean toShow) {
         mTopBar.showTitleView(toShow);
     }
 
-    public void setSubTitle(int resId) {
-        mTopBar.setSubTitle(resId);
+    public QMUIQQFaceView setSubTitle(int resId) {
+        return mTopBar.setSubTitle(resId);
     }
 
-    public void setSubTitle(String subTitle) {
-        mTopBar.setSubTitle(subTitle);
+    public QMUIQQFaceView setSubTitle(CharSequence subTitle) {
+        return mTopBar.setSubTitle(subTitle);
+    }
+
+    @Nullable
+    public QMUIQQFaceView getTitleView(){
+        return mTopBar.getTitleView();
+    }
+
+    @Nullable
+    public QMUIQQFaceView getSubTitleView(){
+        return mTopBar.getSubTitleView();
     }
 
     public void setTitleGravity(int gravity) {
@@ -137,8 +134,24 @@ public class QMUITopBarLayout extends FrameLayout {
         return mTopBar.addRightImageButton(drawableResId, viewId);
     }
 
+    public QMUIAlphaImageButton addRightImageButton(int drawableResId, boolean followTintColor, int viewId) {
+        return mTopBar.addRightImageButton(drawableResId, followTintColor, viewId);
+    }
+
+    public QMUIAlphaImageButton addRightImageButton(int drawableResId, boolean followTintColor, int viewId, int iconWidth, int iconHeight) {
+        return mTopBar.addRightImageButton(drawableResId, followTintColor, viewId, iconWidth, iconHeight);
+    }
+
     public QMUIAlphaImageButton addLeftImageButton(int drawableResId, int viewId) {
         return mTopBar.addLeftImageButton(drawableResId, viewId);
+    }
+
+    public QMUIAlphaImageButton addLeftImageButton(int drawableResId, boolean followTintColor, int viewId) {
+        return mTopBar.addLeftImageButton(drawableResId, followTintColor, viewId);
+    }
+
+    public QMUIAlphaImageButton addLeftImageButton(int drawableResId, boolean followTintColor, int viewId, int iconWidth, int iconHeight) {
+        return mTopBar.addLeftImageButton(drawableResId, followTintColor, viewId, iconWidth, iconHeight);
     }
 
     public Button addLeftTextButton(int stringResId, int viewId) {
@@ -179,7 +192,7 @@ public class QMUITopBarLayout extends FrameLayout {
      * @param alpha 取值范围：[0, 255]，255表示不透明
      */
     public void setBackgroundAlpha(int alpha) {
-        this.getBackground().setAlpha(alpha);
+        this.getBackground().mutate().setAlpha(alpha);
     }
 
     /**
@@ -197,20 +210,16 @@ public class QMUITopBarLayout extends FrameLayout {
         return alphaInt;
     }
 
-    /**
-     * 设置是否要 Topbar 底部的分割线
-     *
-     * @param enabled true 为显示底部分割线，false 则不显示
-     */
-    public void setBackgroundDividerEnabled(boolean enabled) {
-        if (enabled) {
-            if (mTopBarBgWithSeparatorDrawableCache == null) {
-                mTopBarBgWithSeparatorDrawableCache = QMUIDrawableHelper.
-                        createItemSeparatorBg(mTopBarSeparatorColor, mTopBarBgColor, mTopBarSeparatorHeight, false);
-            }
-            QMUIViewHelper.setBackgroundKeepingPadding(this, mTopBarBgWithSeparatorDrawableCache);
-        } else {
-            QMUIViewHelper.setBackgroundColorKeepPadding(this, mTopBarBgColor);
-        }
+    public void setDefaultSkinAttr(String name, int attr) {
+        mDefaultSkinAttrs.put(name, attr);
+    }
+
+    @Override
+    public SimpleArrayMap<String, Integer> getDefaultSkinAttrs() {
+        return mDefaultSkinAttrs;
+    }
+
+    public void eachLeftRightView(@NonNull QMUITopBar.Action action){
+        mTopBar.eachLeftRightView(action);
     }
 }

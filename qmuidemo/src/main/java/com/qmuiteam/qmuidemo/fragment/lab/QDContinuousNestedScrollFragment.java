@@ -20,6 +20,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 
+import com.qmuiteam.qmui.nestedScroll.QMUIContinuousNestedScrollLayout;
 import com.qmuiteam.qmui.widget.QMUITopBarLayout;
 import com.qmuiteam.qmui.widget.grouplist.QMUIGroupListView;
 import com.qmuiteam.qmuidemo.R;
@@ -32,7 +33,10 @@ import androidx.annotation.Nullable;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
-@Widget(group = Group.Lab, name = "continuous nested scroll", iconRes = R.mipmap.icon_grid_in_progress)
+@Widget(group = Group.Lab,
+        widgetClass = QMUIContinuousNestedScrollLayout.class,
+        iconRes = R.mipmap.icon_grid_continuous_nest_scroll,
+        docUrl ="https://github.com/Tencent/QMUI_Android/wiki/QMUIContinuousNestedScrollLayout")
 public class QDContinuousNestedScrollFragment extends BaseFragment {
 
     @BindView(R.id.topbar)
@@ -83,6 +87,54 @@ public class QDContinuousNestedScrollFragment extends BaseFragment {
                     @Override
                     public void onClick(View v) {
                         QDContinuousNestedScroll2Fragment fragment = new QDContinuousNestedScroll2Fragment();
+                        startFragment(fragment);
+                    }
+                })
+                .addItemView(mGroupListView.createItemView(mQDDataManager.getName(
+                        QDContinuousNestedScroll3Fragment.class)), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        QDContinuousNestedScroll3Fragment fragment = new QDContinuousNestedScroll3Fragment();
+                        startFragment(fragment);
+                    }
+                })
+                .addItemView(mGroupListView.createItemView(mQDDataManager.getName(
+                        QDContinuousNestedScroll4Fragment.class)), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        QDContinuousNestedScroll4Fragment fragment = new QDContinuousNestedScroll4Fragment();
+                        startFragment(fragment);
+                    }
+                })
+                .addItemView(mGroupListView.createItemView(mQDDataManager.getName(
+                        QDContinuousNestedScroll5Fragment.class)), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        QDContinuousNestedScroll5Fragment fragment = new QDContinuousNestedScroll5Fragment();
+                        startFragment(fragment);
+                    }
+                })
+                .addItemView(mGroupListView.createItemView(mQDDataManager.getName(
+                        QDContinuousNestedScroll6Fragment.class)), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        QDContinuousNestedScroll6Fragment fragment = new QDContinuousNestedScroll6Fragment();
+                        startFragment(fragment);
+                    }
+                })
+                .addItemView(mGroupListView.createItemView(mQDDataManager.getName(
+                        QDContinuousNestedScroll7Fragment.class)), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        QDContinuousNestedScroll7Fragment fragment = new QDContinuousNestedScroll7Fragment();
+                        startFragment(fragment);
+                    }
+                })
+                .addItemView(mGroupListView.createItemView(mQDDataManager.getName(
+                        QDContinuousNestedScroll8Fragment.class)), new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        QDContinuousNestedScroll8Fragment fragment = new QDContinuousNestedScroll8Fragment();
                         startFragment(fragment);
                     }
                 })

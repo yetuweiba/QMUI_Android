@@ -230,6 +230,26 @@ public class QMUILinearLayout extends QMUIAlphaLinearLayout implements IQMUILayo
     }
 
     @Override
+    public void updateBottomSeparatorColor(int color) {
+        mLayoutHelper.updateBottomSeparatorColor(color);
+    }
+
+    @Override
+    public void updateLeftSeparatorColor(int color) {
+        mLayoutHelper.updateLeftSeparatorColor(color);
+    }
+
+    @Override
+    public void updateRightSeparatorColor(int color) {
+        mLayoutHelper.updateRightSeparatorColor(color);
+    }
+
+    @Override
+    public void updateTopSeparatorColor(int color) {
+        mLayoutHelper.updateTopSeparatorColor(color);
+    }
+
+    @Override
     public void setShadowElevation(int elevation) {
         mLayoutHelper.setShadowElevation(elevation);
     }
@@ -269,5 +289,30 @@ public class QMUILinearLayout extends QMUIAlphaLinearLayout implements IQMUILayo
         super.dispatchDraw(canvas);
         mLayoutHelper.drawDividers(canvas, getWidth(), getHeight());
         mLayoutHelper.dispatchRoundBorderDraw(canvas);
+    }
+
+    @Override
+    public boolean hasBorder() {
+        return mLayoutHelper.hasBorder();
+    }
+
+    @Override
+    public boolean hasLeftSeparator() {
+        return mLayoutHelper.hasLeftSeparator();
+    }
+
+    @Override
+    public boolean hasTopSeparator() {
+        return mLayoutHelper.hasTopSeparator();
+    }
+
+    @Override
+    public boolean hasRightSeparator() {
+        return mLayoutHelper.hasRightSeparator();
+    }
+
+    @Override
+    public boolean hasBottomSeparator() {
+        return mLayoutHelper.hasBottomSeparator();
     }
 }

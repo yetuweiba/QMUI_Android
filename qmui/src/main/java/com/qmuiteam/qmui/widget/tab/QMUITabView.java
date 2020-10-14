@@ -18,31 +18,41 @@ package com.qmuiteam.qmui.widget.tab;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Point;
+import android.graphics.drawable.Drawable;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.animation.Interpolator;
 import android.widget.FrameLayout;
-import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.collection.SimpleArrayMap;
+import androidx.core.view.GravityCompat;
+import androidx.core.view.ViewCompat;
 
 import com.qmuiteam.qmui.R;
+import com.qmuiteam.qmui.skin.IQMUISkinHandlerView;
+import com.qmuiteam.qmui.skin.QMUISkinHelper;
+import com.qmuiteam.qmui.skin.QMUISkinManager;
+import com.qmuiteam.qmui.skin.QMUISkinValueBuilder;
+import com.qmuiteam.qmui.skin.defaultAttr.QMUISkinSimpleDefaultAttrProvider;
 import com.qmuiteam.qmui.util.QMUICollapsingTextHelper;
 import com.qmuiteam.qmui.util.QMUIColorHelper;
 import com.qmuiteam.qmui.util.QMUILangHelper;
 import com.qmuiteam.qmui.util.QMUIResHelper;
+import com.qmuiteam.qmui.widget.roundwidget.QMUIRoundButton;
 
-import androidx.annotation.NonNull;
-import androidx.core.view.GravityCompat;
-import androidx.core.view.ViewCompat;
+import org.jetbrains.annotations.NotNull;
 
-// todo custom view
-// todo gravity
-public class QMUITabView extends FrameLayout {
-
+public class QMUITabView extends FrameLayout implements IQMUISkinHandlerView {
+    private static final String TAG = "QMUITabView";
     private QMUITab mTab;
     private QMUICollapsingTextHelper mCollapsingTextHelper;
     private Interpolator mPositionInterpolator;
@@ -66,10 +76,16 @@ public class QMUITabView extends FrameLayout {
     private float mSelectedTextLeft = 0;
     private float mSelectedTextTop = 0;
 
-    private TextView mSignCountView;
+    private QMUIRoundButton mSignCountView;
 
     public QMUITabView(@NonNull Context context) {
         super(context);
+        
+        // 使得每个tab可被诸如TalkBack等屏幕阅读器聚焦
+        // 这样视力受损用户（如盲人、低、弱视力）就能与tab交互
+        this.setFocusable(true);
+        this.setFocusableInTouchMode(true);
+        
         setWillNotDraw(false);
         mCollapsingTextHelper = new QMUICollapsingTextHelper(this, 1f);
         mGestureDetector = new GestureDetector(getContext(), new GestureDetector.SimpleOnGestureListener() {
@@ -122,13 +138,15 @@ public class QMUITabView extends FrameLayout {
 
     public void bind(QMUITab tab) {
         mCollapsingTextHelper.setTextSize(tab.normalTextSize, tab.selectedTextSize, false);
-        mCollapsingTextHelper.setTextColor(ColorStateList.valueOf(tab.normalColor),
-                ColorStateList.valueOf(tab.selectedColor), false);
         mCollapsingTextHelper.setTypeface(tab.normalTypeface, tab.selectedTypeface, false);
+        mCollapsingTextHelper.setTypefaceUpdateAreaPercent(tab.typefaceUpdateAreaPercent);
         int gravity = Gravity.LEFT | Gravity.TOP;
         mCollapsingTextHelper.setGravity(gravity, gravity, false);
         mCollapsingTextHelper.setText(tab.getText());
         mTab = tab;
+        if(tab.tabIcon != null){
+            tab.tabIcon.setCallback(this);
+        }
         boolean hasRedPoint = mTab.signCount == QMUITab.RED_POINT_SIGN_COUNT;
         boolean hasSignCount = mTab.signCount > 0;
         if (hasRedPoint || hasSignCount) {
@@ -139,14 +157,13 @@ public class QMUITabView extends FrameLayout {
                 mSignCountView.setText(
                         QMUILangHelper.formatNumberToLimitedDigits(mTab.signCount, mTab.signCountDigits));
                 mSignCountView.setMinWidth(QMUIResHelper.getAttrDimen(getContext(),
-                        R.attr.qmui_tab_sign_count_view_minSize_with_text));
-                signCountLp.width = LayoutParams.WRAP_CONTENT;
+                        R.attr.qmui_tab_sign_count_view_min_size_with_text));
                 signCountLp.height = QMUIResHelper.getAttrDimen(getContext(),
-                        R.attr.qmui_tab_sign_count_view_minSize_with_text);
+                        R.attr.qmui_tab_sign_count_view_min_size_with_text);
             } else {
                 mSignCountView.setText(null);
                 int redPointSize = QMUIResHelper.getAttrDimen(getContext(),
-                        R.attr.qmui_tab_sign_count_view_minSize);
+                        R.attr.qmui_tab_sign_count_view_min_size);
                 signCountLp.width = redPointSize;
                 signCountLp.height = redPointSize;
             }
@@ -157,6 +174,7 @@ public class QMUITabView extends FrameLayout {
                 mSignCountView.setVisibility(View.GONE);
             }
         }
+        updateSkinInfo(tab);
         requestLayout();
     }
 
@@ -165,7 +183,8 @@ public class QMUITabView extends FrameLayout {
         QMUITabIcon tabIcon = mTab.getTabIcon();
         if (tabIcon != null) {
             tabIcon.setSelectFraction(fraction,
-                    QMUIColorHelper.computeColor(mTab.normalColor, mTab.selectedColor, fraction));
+                    QMUIColorHelper.computeColor(mTab.getNormalColor(this),
+                            mTab.getSelectColor(this), fraction));
         }
         updateCurrentInfo(fraction);
         mCollapsingTextHelper.setExpansionFraction(1 - fraction);
@@ -245,7 +264,7 @@ public class QMUITabView extends FrameLayout {
         }
     }
 
-    private TextView ensureSignCountView(Context context) {
+    private QMUIRoundButton ensureSignCountView(Context context) {
         if (mSignCountView == null) {
             mSignCountView = createSignCountView(context);
             FrameLayout.LayoutParams signCountLp;
@@ -260,8 +279,16 @@ public class QMUITabView extends FrameLayout {
         return mSignCountView;
     }
 
-    protected TextView createSignCountView(Context context) {
-        return new TextView(context, null, R.attr.qmui_tab_sign_count_view);
+    protected QMUIRoundButton createSignCountView(Context context) {
+        QMUIRoundButton btn = new QMUIRoundButton(
+                context, null, R.attr.qmui_tab_sign_count_view);
+        QMUISkinSimpleDefaultAttrProvider skinProvider = new QMUISkinSimpleDefaultAttrProvider();
+        skinProvider.setDefaultSkinAttr(
+                QMUISkinValueBuilder.BACKGROUND, R.attr.qmui_skin_support_tab_sign_count_view_bg_color);
+        skinProvider.setDefaultSkinAttr(
+                QMUISkinValueBuilder.TEXT_COLOR, R.attr.qmui_skin_support_tab_sign_count_view_text_color);
+        btn.setTag(R.id.qmui_skin_default_attr_provider, skinProvider);
+        return btn;
     }
 
     @Override
@@ -291,6 +318,11 @@ public class QMUITabView extends FrameLayout {
                 widthSize = (int) (mCollapsingTextHelper.getExpandedTextWidth() +
                         mTab.getIconTextGap() +
                         mTab.getNormalTabIconWidth() * mTab.getSelectedTabIconScale());
+            }
+            if(mSignCountView != null && mSignCountView.getVisibility() != View.GONE){
+                mSignCountView.measure(0, 0);
+                widthSize = Math.max(widthSize,
+                        widthSize + mSignCountView.getMeasuredWidth() + mTab.signCountLeftMarginWithIconOrText);
             }
             useWidthMeasureSpec = MeasureSpec.makeMeasureSpec(widthSize, MeasureSpec.EXACTLY);
         }
@@ -366,7 +398,15 @@ public class QMUITabView extends FrameLayout {
             bottom = (int) (mCurrentIconTop);
         }
         Point point = new Point(left, bottom);
-        point.offset(mTab.signCountLeftMarginWithIconOrText, mTab.signCountBottomMarginWithIconOrText);
+        int verticalOffset = mTab.signCountBottomMarginWithIconOrText;
+        if(verticalOffset == QMUITab.SIGN_COUNT_VIEW_LAYOUT_VERTICAL_CENTER && mSignCountView != null){
+            point.y = getMeasuredHeight() - (getMeasuredHeight() - mSignCountView.getMeasuredHeight()) / 2;
+            point.offset(mTab.signCountLeftMarginWithIconOrText, 0);
+        }else{
+            point.offset(mTab.signCountLeftMarginWithIconOrText, verticalOffset);
+        }
+
+
         return point;
     }
 
@@ -624,9 +664,24 @@ public class QMUITabView extends FrameLayout {
     }
 
     @Override
+    public void invalidateDrawable(@NonNull Drawable drawable) {
+        invalidate();
+    }
+
+    @Override
     public final void draw(Canvas canvas) {
         onDrawTab(canvas);
         super.draw(canvas);
+    }
+    
+    @Override
+    public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+
+        // 给每个tab添加文本标签
+        // 使得TalkBack等屏幕阅读器focus 到 tab上时可将tab的文本通过TTS朗读出来
+        // 这样视力受损用户（如盲人、低、弱视力）就能和widget交互
+        info.setContentDescription(mTab.getText());
     }
 
     protected void onDrawTab(Canvas canvas) {
@@ -646,6 +701,63 @@ public class QMUITabView extends FrameLayout {
         canvas.translate(mCurrentTextLeft, mCurrentTextTop);
         mCollapsingTextHelper.draw(canvas);
         canvas.restore();
+    }
+
+    @Override
+    public void handle(@NotNull QMUISkinManager manager, int skinIndex, @NotNull Resources.Theme theme, @Nullable SimpleArrayMap<String, Integer> attrs) {
+        if (mTab != null) {
+            updateSkinInfo(mTab);
+            invalidate();
+        }
+    }
+
+    private void updateSkinInfo(QMUITab tab) {
+        int normalColor = tab.getNormalColor(this);
+        int selectedColor = tab.getSelectColor(this);
+        mCollapsingTextHelper.setTextColor(
+                ColorStateList.valueOf(normalColor),
+                ColorStateList.valueOf(selectedColor),
+                true);
+        if (tab.tabIcon != null) {
+            if (tab.skinChangeWithTintColor || (tab.skinChangeNormalWithTintColor && tab.skinChangeSelectedWithTintColor)) {
+                tab.tabIcon.tint(normalColor, selectedColor);
+            } else {
+                if(tab.tabIcon.hasSelectedIcon()){
+                    if(tab.skinChangeNormalWithTintColor){
+                        tab.tabIcon.tintNormal(normalColor);
+                    }else{
+                        if(tab.normalIconAttr != 0){
+                            Drawable normalIcon = QMUISkinHelper.getSkinDrawable(this, tab.normalIconAttr);
+                            if(normalIcon != null){
+                                tab.tabIcon.srcNormal(normalIcon);
+                            }
+                        }
+                    }
+
+                    if(tab.skinChangeSelectedWithTintColor){
+                        tab.tabIcon.tintSelected(normalColor);
+                    }else{
+                        if(tab.selectedIconAttr != 0){
+                            Drawable selectedIcon = QMUISkinHelper.getSkinDrawable(this, tab.selectedIconAttr);
+                            if(selectedIcon != null){
+                                tab.tabIcon.srcSelected(selectedIcon);
+                            }
+                        }
+                    }
+                }else{
+                    if(tab.skinChangeNormalWithTintColor){
+                        tab.tabIcon.tint(normalColor, selectedColor);
+                    }else{
+                        if(tab.normalIconAttr != 0){
+                            Drawable normalIcon = QMUISkinHelper.getSkinDrawable(this, tab.normalIconAttr);
+                            if(normalIcon != null){
+                                tab.tabIcon.src(normalIcon, normalColor, selectedColor);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public interface Callback {

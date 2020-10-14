@@ -48,7 +48,7 @@ public abstract class QMUIPagerAdapter extends PagerAdapter {
 
     @Override
     @NonNull
-    public final Object instantiateItem(@NonNull ViewGroup container, int position) {
+    public Object instantiateItem(@NonNull ViewGroup container, int position) {
         Object item = mScrapItems.get(position);
         if (item == null) {
             item = hydrate(container, position);
@@ -67,14 +67,14 @@ public abstract class QMUIPagerAdapter extends PagerAdapter {
     /**
      * sometimes you may need to perform some operations on all items,
      * such as perform cleanup when the ViewPager is destroyed
-     * notice: this not
+     * once the action return true, then do not handle remain items
      *
      * @param action
      */
     public void each(@NonNull Action action) {
         int size = mScrapItems.size();
         for (int i = 0; i < size; i++) {
-            Object item = mScrapItems.indexOfValue(i);
+            Object item = mScrapItems.valueAt(i);
             if (action.call(item)) {
                 break;
             }

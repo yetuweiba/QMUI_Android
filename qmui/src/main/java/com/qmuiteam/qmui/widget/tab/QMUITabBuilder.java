@@ -20,9 +20,11 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.view.Gravity;
 
-import com.qmuiteam.qmui.util.QMUIDisplayHelper;
-
 import androidx.annotation.Nullable;
+
+import com.qmuiteam.qmui.R;
+import com.qmuiteam.qmui.util.QMUIDisplayHelper;
+import com.qmuiteam.qmui.util.QMUIResHelper;
 
 
 /**
@@ -32,15 +34,26 @@ public class QMUITabBuilder {
     /**
      * icon in normal state
      */
+    private int normalDrawableAttr = 0;
     private @Nullable Drawable normalDrawable;
     /**
      * icon in selected state
      */
+    private int selectedDrawableAttr = 0;
     private @Nullable Drawable selectedDrawable;
     /**
      * change icon by tint color, if true, selectedDrawable will not work
      */
     private boolean dynamicChangeIconColor = false;
+
+    /**
+     * for skin change. if true, then normalDrawableAttr and selectedDrawableAttr will not work.
+     * otherwise, icon will be replaced by normalDrawableAttr and selectedDrawableAttr
+     */
+    private boolean skinChangeWithTintColor = false;
+    private boolean skinChangeNormalWithTintColor = true;
+    private boolean skinChangeSelectedWithTintColor = true;
+
     /**
      * text size in normal state
      */
@@ -53,11 +66,22 @@ public class QMUITabBuilder {
     /**
      * text color(icon color in if dynamicChangeIconColor == true) in  normal state
      */
-    private int normalColor;
+    private int normalColorAttr = R.attr.qmui_skin_support_tab_normal_color;
     /**
      * text color(icon color in if dynamicChangeIconColor == true) in  selected state
      */
-    private int selectedColor;
+    private int selectedColorAttr = R.attr.qmui_skin_support_tab_selected_color;
+
+    /**
+     * text color with no skin support
+     */
+    private int normalColor = 0;
+
+    /**
+     * text color with no skin support
+     */
+    private int selectColor = 0;
+
     /**
      * icon position(left/top/right/bottom)
      */
@@ -93,6 +117,8 @@ public class QMUITabBuilder {
      * scale of tab icon in selected state
      */
     float selectedTabIconScale = 1f;
+
+    float typefaceUpdateAreaPercent = 0.25f;
 
     /**
      * signCount or redPoint
@@ -132,13 +158,15 @@ public class QMUITabBuilder {
     }
 
     QMUITabBuilder(QMUITabBuilder other) {
+        this.normalDrawableAttr = other.normalDrawableAttr;
+        this.selectedDrawableAttr = other.selectedDrawableAttr;
         this.normalDrawable = other.normalDrawable;
         this.selectedDrawable = other.selectedDrawable;
         this.dynamicChangeIconColor = other.dynamicChangeIconColor;
         this.normalTextSize = other.normalTextSize;
         this.selectTextSize = other.selectTextSize;
-        this.normalColor = other.normalColor;
-        this.selectedColor = other.selectedColor;
+        this.normalColorAttr = other.normalColorAttr;
+        this.selectedColorAttr = other.selectedColorAttr;
         this.iconPosition = other.iconPosition;
         this.gravity = other.gravity;
         this.text = other.text;
@@ -153,10 +181,16 @@ public class QMUITabBuilder {
         this.selectedTabIconScale = other.selectedTabIconScale;
         this.iconTextGap = other.iconTextGap;
         this.allowIconDrawOutside = other.allowIconDrawOutside;
+        this.typefaceUpdateAreaPercent = other.typefaceUpdateAreaPercent;
     }
 
     public QMUITabBuilder setAllowIconDrawOutside(boolean allowIconDrawOutside) {
         this.allowIconDrawOutside = allowIconDrawOutside;
+        return this;
+    }
+
+    public QMUITabBuilder setTypefaceUpdateAreaPercent(float typefaceUpdateAreaPercent) {
+        this.typefaceUpdateAreaPercent = typefaceUpdateAreaPercent;
         return this;
     }
 
@@ -165,8 +199,34 @@ public class QMUITabBuilder {
         return this;
     }
 
+    public QMUITabBuilder setNormalDrawableAttr(int normalDrawableAttr) {
+        this.normalDrawableAttr = normalDrawableAttr;
+        return this;
+    }
+
     public QMUITabBuilder setSelectedDrawable(Drawable selectedDrawable) {
         this.selectedDrawable = selectedDrawable;
+        return this;
+    }
+
+    public QMUITabBuilder setSelectedDrawableAttr(int selectedDrawableAttr) {
+        this.selectedDrawableAttr = selectedDrawableAttr;
+        return this;
+    }
+
+    @Deprecated
+    public QMUITabBuilder skinChangeWithTintColor(boolean skinChangeWithTintColor){
+        this.skinChangeWithTintColor = skinChangeWithTintColor;
+        return this;
+    }
+
+    public QMUITabBuilder skinChangeNormalWithTintColor(boolean skinChangeNormalWithTintColor){
+        this.skinChangeNormalWithTintColor = skinChangeNormalWithTintColor;
+        return this;
+    }
+
+    public QMUITabBuilder skinChangeSelectedWithTintColor(boolean skinChangeSelectedWithTintColor){
+        this.skinChangeSelectedWithTintColor = skinChangeSelectedWithTintColor;
         return this;
     }
 
@@ -211,9 +271,39 @@ public class QMUITabBuilder {
         return this;
     }
 
-    public QMUITabBuilder setColor(int normalColor, int selectedColor) {
+    public QMUITabBuilder setColorAttr(int normalColorAttr, int selectedColorAttr) {
+        this.normalColorAttr = normalColorAttr;
+        this.selectedColorAttr = selectedColorAttr;
+        return this;
+    }
+
+    public QMUITabBuilder setNormalColorAttr(int normalColorAttr) {
+        this.normalColorAttr = normalColorAttr;
+        return this;
+    }
+
+    public QMUITabBuilder setSelectedColorAttr(int selectedColorAttr) {
+        this.selectedColorAttr = selectedColorAttr;
+        return this;
+    }
+
+    public QMUITabBuilder setColor(int normalColor, int selectColor){
+        this.normalColorAttr = 0;
+        this.selectedColorAttr = 0;
         this.normalColor = normalColor;
-        this.selectedColor = selectedColor;
+        this.selectColor = selectColor;
+        return this;
+    }
+
+    public QMUITabBuilder setNormalColor(int normalColor) {
+        this.normalColorAttr = 0;
+        this.normalColor = normalColor;
+        return this;
+    }
+
+    public QMUITabBuilder setSelectColor(int selectColor) {
+        this.selectedColorAttr = 0;
+        this.selectColor = selectColor;
         return this;
     }
 
@@ -237,16 +327,38 @@ public class QMUITabBuilder {
         return this;
     }
 
-    public QMUITab build() {
+    public QMUITab build(Context context) {
         QMUITab tab = new QMUITab(this.text);
+        if(!skinChangeWithTintColor){
+            if(!skinChangeNormalWithTintColor){
+                if(normalDrawableAttr != 0){
+                    normalDrawable = QMUIResHelper.getAttrDrawable(context, normalDrawableAttr);
+                }
+            }
+
+            if(!skinChangeSelectedWithTintColor){
+                if(selectedDrawableAttr != 0){
+                    selectedDrawable = QMUIResHelper.getAttrDrawable(context, selectedDrawableAttr);
+                }
+            }
+        }
+
+        tab.skinChangeWithTintColor = this.skinChangeWithTintColor;
+        tab.skinChangeNormalWithTintColor = this.skinChangeNormalWithTintColor;
+        tab.skinChangeSelectedWithTintColor = this.skinChangeSelectedWithTintColor;
+
         if (normalDrawable != null) {
             if (dynamicChangeIconColor || selectedDrawable == null) {
-                tab.tabIcon = new QMUITabIcon(normalDrawable, null);
+                tab.tabIcon = new QMUITabIcon(normalDrawable, null, true);
+                // must same
+                tab.skinChangeSelectedWithTintColor = tab.skinChangeNormalWithTintColor;
             } else {
-                tab.tabIcon = new QMUITabIcon(normalDrawable, selectedDrawable);
+                tab.tabIcon = new QMUITabIcon(normalDrawable, selectedDrawable, false);
             }
             tab.tabIcon.setBounds(0, 0, normalTabIconWidth, normalTabIconHeight);
         }
+        tab.normalIconAttr = this.normalDrawableAttr;
+        tab.selectedIconAttr = this.selectedDrawableAttr;
         tab.normalTabIconWidth = this.normalTabIconWidth;
         tab.normalTabIconHeight = this.normalTabIconHeight;
         tab.selectedTabIconScale = this.selectedTabIconScale;
@@ -256,13 +368,16 @@ public class QMUITabBuilder {
         tab.selectedTextSize = this.selectTextSize;
         tab.normalTypeface = this.normalTypeface;
         tab.selectedTypeface = this.selectedTypeface;
+        tab.normalColorAttr = this.normalColorAttr;
+        tab.selectedColorAttr = this.selectedColorAttr;
         tab.normalColor = this.normalColor;
-        tab.selectedColor = this.selectedColor;
+        tab.selectColor = this.selectColor;
         tab.signCount = this.signCount;
         tab.signCountDigits = this.signCountDigits;
         tab.signCountLeftMarginWithIconOrText = this.signCountLeftMarginWithIconOrText;
         tab.signCountBottomMarginWithIconOrText = this.signCountBottomMarginWithIconOrText;
         tab.iconTextGap = this.iconTextGap;
+        tab.typefaceUpdateAreaPercent = this.typefaceUpdateAreaPercent;
         return tab;
     }
 }
